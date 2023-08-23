@@ -1,0 +1,11 @@
+{
+    "senderEmail": "1500404845@qq.com",
+    "senderPassword": "tetipvijyyzqhcca",
+    "smtpHost": "smtp.qq.com",
+    "smtpPort": 465,
+    "recipientEmails": [
+        "appleapp2017@outlook.com",
+        "2835967381@qq.com" 
+    ],
+    "times": "26 11 * * *"
+}

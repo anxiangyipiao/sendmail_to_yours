@@ -1,7 +1,7 @@
 package main
 
 import (
-
+	"os"
 	"encoding/json"
 	"html/template"
 	"log"
@@ -11,19 +11,17 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-// 配置信息
-var APPID string = "rmjvslk7ktj1gllc"
-var APPSECRET  =  ""
-var your_sender_email = "@qq.com"
-var your_sender_password = ""
-var smtpHost = "smtp.qq.com"
-var smtpPort = 465
-var recipientEmails = []string{"qq.com"}
-var times = "22 22 * * *"         //<分钟> <小时> <日期> <月份> <星期>
+// // 配置信息
+// var your_sender_email = "1500404845@qq.com"
+// var your_sender_password = "tetipvijyyzqhcca"
+// var smtpHost = "smtp.qq.com"
+// var smtpPort = 465
+// var recipientEmails = []string{"appleapp2017@outlook.com"} //"1978418139@qq.com","2835967381@qq.com",
+// var times = "26 11 * * *"         //<分钟> <小时> <日期> <月份> <星期>
 
 
 // 模板字符串
-var templateString = `
+const templateString = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -52,12 +50,15 @@ var templateString = `
 </head>
 <body>
 	<div class="container">
-		<p>{{.Text}}</p>	
-		<img src="{{.Image}}" alt="Responsive Image">	
+		<p>{{.LoveSentence}}</p>
+		<p>每日开心一下：{{.Xiaohua}}</p>
+		<img src="{{.Image}}" alt="Responsive Image">
+		
 	</div>
 </body>
 </html>
 `
+// <p>{{.Dog}}</p>
 
 // 生成 HTML 内容
 func generateHTML(templateString string, data Custom) (string, error) {
@@ -78,12 +79,25 @@ func generateHTML(templateString string, data Custom) (string, error) {
 
 //数据模型
 type Custom struct {
-	Text string `json:"text"`
-	Image string `json:"imgurl"`
+
+	LoveSentence string
+	Dog string
+	Image string
+	Xiaohua string
+	
 }
 
+// API 响应数据模型
+type APIResponse struct {
+	Data struct {
+		Text string `json:"text"`
+		Url string `json:"url"`
+	} `json:"data"`
+}
+
+
 // 获得数据函数
-func fetchDataFromAPI(apiURL string, target interface{}) {
+func fetchDataFromAPI(apiURL string, target interface{}){
 	resp, err := http.Get(apiURL)
 	if err != nil {
 		log.Fatal(err)
@@ -97,37 +111,50 @@ func fetchDataFromAPI(apiURL string, target interface{}) {
 	if err := json.NewDecoder(resp.Body).Decode(target); err != nil {
 		log.Fatal(err)
 	}
+
 }
 
-
+//"https://www.dmoe.cc/random.php?return=json"
+//"http://api.btstu.cn/yan/api.php?charset=utf-8&encode=json"
 // 生成你的数据
 func generateData() Custom {
 
-	var custom Custom
 
-	fetchDataFromAPI("https://www.dmoe.cc/random.php?return=json", &custom)
+	var api1 APIResponse	//情话
+	fetchDataFromAPI("https://api.gumengya.com/Api/LoveSentence?format=json", &api1)
 
-	fetchDataFromAPI("http://api.btstu.cn/yan/api.php?charset=utf-8&encode=json", &custom)
+	var api2 APIResponse	//狗狗
+	fetchDataFromAPI("https://api.gumengya.com/Api/Dog", &api2)
 
+	var api3 APIResponse     //图片
+	fetchDataFromAPI("https://api.gumengya.com/Api/FjImg", &api3)
+
+	var api4 APIResponse	//笑话
+	fetchDataFromAPI("https://api.gumengya.com/Api/Xiaohua", &api4)
 	// fetchDataFromAPI("https://www.mxnzp.com/api/jokes/list?page=1&app_id="+APPID+"&app_secret="+APPSECRET, &custom)
 	
+	var custom Custom
+	custom.LoveSentence = api1.Data.Text
+	custom.Dog = api2.Data.Text
+	custom.Image = api3.Data.Url
+	custom.Xiaohua = api4.Data.Text
+
+
 	return custom
 
 }
 
 // 发送邮件
-func sendEmail(htmlContent, recipientEmail string) {
+func sendEmail(htmlContent, recipientEmail string, config Config) {
 
-	senderEmail := your_sender_email
-	senderPassword := your_sender_password
 
 	sender := gomail.NewMessage()
-	sender.SetHeader("From", senderEmail)
+	sender.SetHeader("From", config.SenderEmail)
 	sender.SetHeader("To", recipientEmail)
 	sender.SetHeader("Subject", "Daily Report")
 	sender.SetBody("text/html", htmlContent)
 
-	dialer := gomail.NewDialer(smtpHost, smtpPort, senderEmail, senderPassword)
+	dialer := gomail.NewDialer(config.SMTPHost, config.SMTPPort ,config.SenderEmail, config.SenderPassword)
 
 	if err := dialer.DialAndSend(sender); err != nil {
 		log.Println("Error sending email to", recipientEmail, ":", err)
@@ -136,29 +163,61 @@ func sendEmail(htmlContent, recipientEmail string) {
 	}
 }
 
+// 配置信息
+type Config struct {
+	SenderEmail     string   `json:"senderEmail"`
+	SenderPassword  string   `json:"senderPassword"`
+	SMTPHost        string   `json:"smtpHost"`
+	SMTPPort        int      `json:"smtpPort"`
+	RecipientEmails []string `json:"recipientEmails"`
+	Times           string   `json:"times"`
+}
 
+// 读取配置文件
+func readConfig(filename string) (Config, error) {
+	var config Config
+
+	file, err := os.Open(filename)
+	if err != nil {
+		return config, err
+	}
+	defer file.Close()
+
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&config)
+	if err != nil {
+		return config, err
+	}
+
+	return config, nil
+}
 
 func main() {
 
 	c := cron.New()
 
 	// 添加一个定时任务，每天中午8点发送邮件
-	_, err := c.AddFunc(times, func() {
+	// _, err := c.AddFunc(times, func() {
 		// 获取待发送的数据
 		data := generateData()
-
+		
 		// 生成 HTML 内容
 		htmlContent, err := generateHTML(templateString, data)
 		if err != nil {
 			log.Fatal(err)
 		}
 
+		config, err := readConfig("config.json")
+		if err != nil {
+			log.Println("Error reading config file:", err)
+		return
+		}
 	
 		// 发送邮件给每个收件人
-		for _, recipientEmail := range recipientEmails {
-			sendEmail(htmlContent, recipientEmail)
+		for _, recipientEmail := range config.RecipientEmails {
+			sendEmail(htmlContent, recipientEmail, config)
 		}
-	})
+	// })
 
 	if err != nil {
 		log.Fatal("Failed to add cron job:", err)
