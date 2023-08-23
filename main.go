@@ -11,14 +11,6 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-// // 配置信息
-// var your_sender_email = "1500404845@qq.com"
-// var your_sender_password = "tetipvijyyzqhcca"
-// var smtpHost = "smtp.qq.com"
-// var smtpPort = 465
-// var recipientEmails = []string{"appleapp2017@outlook.com"} //"1978418139@qq.com","2835967381@qq.com",
-// var times = "26 11 * * *"         //<分钟> <小时> <日期> <月份> <星期>
-
 
 // 模板字符串
 const templateString = `
@@ -194,10 +186,19 @@ func readConfig(filename string) (Config, error) {
 
 func main() {
 
+	// 读取配置文件
+	config, err := readConfig("config.json")
+	if err != nil {
+			log.Println("Error reading config file:", err)
+		return
+	}
+
+
 	c := cron.New()
 
-	// 添加一个定时任务，每天中午8点发送邮件
-	// _, err := c.AddFunc(times, func() {
+	// 添加一个定时任务
+	_,err = c.AddFunc(config.Times, func() {
+		
 		// 获取待发送的数据
 		data := generateData()
 		
@@ -207,17 +208,11 @@ func main() {
 			log.Fatal(err)
 		}
 
-		config, err := readConfig("config.json")
-		if err != nil {
-			log.Println("Error reading config file:", err)
-		return
-		}
-	
 		// 发送邮件给每个收件人
 		for _, recipientEmail := range config.RecipientEmails {
 			sendEmail(htmlContent, recipientEmail, config)
 		}
-	// })
+	})
 
 	if err != nil {
 		log.Fatal("Failed to add cron job:", err)
